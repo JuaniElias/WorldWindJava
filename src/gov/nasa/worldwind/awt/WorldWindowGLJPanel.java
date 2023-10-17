@@ -72,6 +72,7 @@ public class WorldWindowGLJPanel extends GLJPanel implements WorldWindow, Proper
             this.createDefaultInputHandler();
             WorldWind.addPropertyChangeListener(WorldWind.SHUTDOWN_EVENT, this);
             this.wwd.endInitialization();
+            
         }
         catch (Exception e)
         {
