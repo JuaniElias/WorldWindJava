@@ -1,7 +1,29 @@
 /*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
+ * Copyright 2006-2009, 2017, 2020 United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ *
+ * The NASA World Wind Java (WWJ) platform is licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * NASA World Wind Java (WWJ) also contains the following 3rd party Open Source
+ * software:
+ *
+ *     Jackson Parser – Licensed under Apache 2.0
+ *     GDAL – Licensed under MIT
+ *     JOGL – Licensed under  Berkeley Software Distribution (BSD)
+ *     Gluegen – Licensed under Berkeley Software Distribution (BSD)
+ *
+ * A complete listing of 3rd Party software notices and licenses included in
+ * NASA World Wind Java (WWJ)  can be found in the WorldWindJava-v2.2 3rd-party
+ * notices and licenses PDF found in code directory.
  */
 
 package gov.nasa.worldwind.symbology.milstd2525;
@@ -20,9 +42,9 @@ import java.util.List;
 
 /**
  * Implementation of {@link gov.nasa.worldwind.symbology.TacticalSymbol} that provides support for tactical symbols from
- * the <a href="http://www.assistdocs.com/search/document_details.cfm?ident_number=114934">MIL-STD-2525</a> symbology
- * set. See the <a href="https://goworldwind.org/developers-guide/symbology/tactical-symbols/"
- * target="_blank">Tactical Symbol Usage Guide</a> for instructions on using TacticalSymbol in an application.
+ * the <a href="https://en.wikipedia.org/wiki/NATO_Joint_Military_Symbology#MIL-STD-2525A">MIL-STD-2525</a> symbology
+ * set. See the <a href="https://worldwind.arc.nasa.gov/java/tutorials/tactical-graphics/" target="_blank">Tutorial</a>
+ * for instructions on using TacticalSymbol in an application.
  *
  * @author dcollins
  * @version $Id: MilStd2525TacticalSymbol.java 2196 2014-08-06 19:42:15Z tgaskins $
@@ -173,27 +195,14 @@ public class MilStd2525TacticalSymbol extends AbstractTacticalSymbol
      * symbology scheme the symbol belongs to:
      * <p>
      * <strong>Warfighting, Signals Intelligence, Stability Operations</strong>
-     * <ul> 
-     * <li>STATUS_ANTICIPATED</li> 
-     * <li>STATUS_PRESENT</li> 
-     * <li>STATUS_PRESENT_FULLY_CAPABLE</li>
-     * <li>STATUS_PRESENT_DAMAGED</li> 
-     * <li>STATUS_PRESENT_DESTROYED</li> 
-     * <li>STATUS_PRESENT_FULL_TO_CAPACITY</li> </ul>
+     * <ul> <li>STATUS_ANTICIPATED</li> <li>STATUS_PRESENT</li> <li>STATUS_PRESENT_FULLY_CAPABLE</li>
+     * <li>STATUS_PRESENT_DAMAGED</li> <li>STATUS_PRESENT_DESTROYED</li> <li>STATUS_PRESENT_FULL_TO_CAPACITY</li> </ul>
      * <p>
      * <strong>Tactical Graphics</strong>
-     * <ul> 
-     * <li>STATUS_ANTICIPATED</li> 
-     * <li>STATUS_SUSPECTED</li> 
-     * <li>STATUS_PRESENT</li> 
-     * <li>STATUS_KNOWN</li> 
-     * </ul>
+     * <ul> <li>STATUS_ANTICIPATED</li> <li>STATUS_SUSPECTED</li> <li>STATUS_PRESENT</li> <li>STATUS_KNOWN</li> </ul>
      * <p>
      * <strong>Emergency Management</strong>
-     * <ul> 
-     * <li>STATUS_ANTICIPATED</li> 
-     * <li>STATUS_PRESENT</li> 
-     * </ul>
+     * <ul> <li>STATUS_ANTICIPATED</li> <li>STATUS_PRESENT</li> </ul>
      *
      * @param value the new value for the Status/Operational Condition field.
      *
@@ -529,20 +538,25 @@ public class MilStd2525TacticalSymbol extends AbstractTacticalSymbol
             // The length of the direction of movement line is equal to the height of the symbol frame. See
             // MIL-STD-2525C section 5.3.4.1.c, page 33.
             double length = this.iconRect.getHeight();
+            Boolean directionOnly = true;
             Object d = this.getModifier(SymbologyConstants.SPEED_LEADER_SCALE);
-            if (d != null && d instanceof Number)
+            if (d != null && d instanceof Number) {
+                directionOnly = false;
                 length *= ((Number) d).doubleValue();
-
+            }
             if (this.useGroundHeadingIndicator)
             {
                 List<? extends Point2D> points = MilStd2525Util.computeGroundHeadingIndicatorPoints(dc, osym.placePoint,
-                    (Angle) o, length, this.iconRect.getHeight());
-                this.addLine(dc, Offset.BOTTOM_CENTER, points, LAYOUT_RELATIVE, points.size() - 1, osym);
+                        (Angle) o, length, this.iconRect.getHeight(), directionOnly);
+                if (directionOnly)
+                    this.addLine(dc, Offset.BOTTOM_CENTER, points, LAYOUT_RELATIVE, points.size() - 4, osym);
+                else
+                    this.addLine(dc, Offset.BOTTOM_CENTER, points, LAYOUT_RELATIVE, points.size() - 1, osym);
             }
             else
             {
                 List<? extends Point2D> points = MilStd2525Util.computeCenterHeadingIndicatorPoints(dc,
-                    osym.placePoint, (Angle) o, length);
+                    osym.placePoint, (Angle) o, length, directionOnly);
                 this.addLine(dc, Offset.CENTER, points, null, 0, osym);
             }
         }

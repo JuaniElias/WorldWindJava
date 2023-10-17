@@ -1,7 +1,29 @@
 /*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
+ * Copyright 2006-2009, 2017, 2020 United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ * 
+ * The NASA World Wind Java (WWJ) platform is licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ * 
+ * NASA World Wind Java (WWJ) also contains the following 3rd party Open Source
+ * software:
+ * 
+ *     Jackson Parser – Licensed under Apache 2.0
+ *     GDAL – Licensed under MIT
+ *     JOGL – Licensed under  Berkeley Software Distribution (BSD)
+ *     Gluegen – Licensed under Berkeley Software Distribution (BSD)
+ * 
+ * A complete listing of 3rd Party software notices and licenses included in
+ * NASA World Wind Java (WWJ)  can be found in the WorldWindJava-v2.2 3rd-party
+ * notices and licenses PDF found in code directory.
  */
 
 package gov.nasa.worldwind.data;
@@ -16,7 +38,6 @@ import gov.nasa.worldwind.util.gdal.GDALUtils;
 import org.gdal.gdal.*;
 import org.gdal.gdalconst.gdalconst;
 import org.gdal.osr.SpatialReference;
-
 import java.awt.geom.*;
 import java.io.*;
 import java.nio.*;
@@ -247,12 +268,14 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
         if (!WWUtil.isEmpty(proj))
         {
             srs = new SpatialReference(proj);
+            GDALUtils.setGDAL3axis(srs);
         }
 
         if ((null == srs || srs.IsLocal() == 1) && this.hasKey(AVKey.SPATIAL_REFERENCE_WKT))
         {
             proj = this.getStringValue(AVKey.SPATIAL_REFERENCE_WKT);
             srs = new SpatialReference(proj);
+            GDALUtils.setGDAL3axis(srs);
         }
 
         return srs;
@@ -279,18 +302,15 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
      * <p>
      * AVKey.HEIGHT - the maximum height of the image
      * <p>
-     * AVKey.COORDINATE_SYSTEM - one of the next values:
-     * <ul>
-     * <li>AVKey.COORDINATE_SYSTEM_SCREEN
-     * <li>AVKey.COORDINATE_SYSTEM_GEOGRAPHIC
-     * <li>AVKey.COORDINATE_SYSTEM_PROJECTED
-     * </ul>
+     * AVKey.COORDINATE_SYSTEM - one of the next values: AVKey.COORDINATE_SYSTEM_SCREEN
+     * AVKey.COORDINATE_SYSTEM_GEOGRAPHIC AVKey.COORDINATE_SYSTEM_PROJECTED
+     * <p>
      * AVKey.SECTOR - in case of Geographic CS, contains a regular Geographic Sector defined by lat/lon coordinates of
      * corners in case of Projected CS, contains a bounding box of the area
      *
-     * @param ds GDAL's Dataset
+     * @param ds               GDAL's Dataset
      * @param quickReadingMode if quick reading mode is enabled GDAL will not spend much time on heavy calculations,
-     * like for example calculating Min/Max for entire elevation raster
+     *                         like for example calculating Min/Max for entire elevation raster
      */
     protected void init(Dataset ds, boolean quickReadingMode)
     {
@@ -483,7 +503,15 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
 
         Dataset ds = drvMem.Create("roi-mask", width, height, 1, gdalconst.GDT_UInt32);
         Band band = ds.GetRasterBand(1);
-        band.SetColorInterpretation(gdalconst.GCI_AlphaBand);
+        
+		/*
+		 * Leave the band color interp undefined, otherwise handling of alpha
+		 * won't work as desired for GDAL version 3.1 and up. Doesn't cause a
+		 * problem with versions 1.7.2 and 2.4.0. Check with 'InstallImagery' app.
+		 * See https://lists.osgeo.org/pipermail/gdal-dev/2019-June/050518.html
+		 * 
+		 * band.SetColorInterpretation(gdalconst.GCI_AlphaBand);
+		 */        
         double missingSignal = (double) GDALUtils.ALPHA_MASK;
         band.SetNoDataValue(missingSignal);
         band.Fill(missingSignal);
@@ -504,7 +532,7 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
      * The purpose of this method is to create the best suited dataset for the requested area. The dataset may contain
      * overviews, so instead of retrieving raster from the highest resolution source, we will compose a temporary
      * dataset from an overview, and/or we may clip only the requested area. This will accelerate reprojection (if
-     * needed), because the reporjection will be done on much smaller dataset.
+     * needed), because the reprojection will be done on much smaller dataset.
      *
      * @param reqWidth  width of the requested area
      * @param reqHeight height of the requested area
@@ -976,6 +1004,24 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
                 band.SetColorInterpretation(colorInt);
             }
 
+            // Special handling for different GDAL versions. The way ReprojectImage works
+            // with respect to alpha layers was broken, probably starting with version 1.8.0
+            // https://lists.osgeo.org/pipermail/gdal-dev/2019-May/050175.html
+            // It was changed again version 3.1
+            //		https://lists.osgeo.org/pipermail/gdal-dev/2019-June/050517.html
+            //      https://github.com/OSGeo/gdal/commit/b427cb23ff1bc2a5ba2f6634fc3bd90816bb7789
+            //
+            // When there's no alpha band in the source, set the destination dataset alpha band
+            // to no transparency, so that when it's used in ReprojectImage, the resulting 
+            // image is opaque.  Otherwise, leave the existing band alone.
+            if ((colorInt == gdalconst.GCI_AlphaBand) 
+            		&& ((GDALUtils.getGDALversion() < 18) 
+            			|| (GDALUtils.getGDALversion() >= 31)
+            			|| (null == srcBand)))
+            {
+                band.Fill((double) GDALUtils.ALPHA_MASK);
+            }
+
             if (null != missingDataSignal && colorInt == gdalconst.GCI_GrayIndex)
             {
                 band.Fill(missingDataSignal);
@@ -1007,21 +1053,17 @@ public class GDALDataRaster extends AbstractDataRaster implements Cacheable
      * Builds a writable data raster for the requested region of interest (ROI)
      *
      * @param params Required parameters are:
-     * <p>
-     * AVKey.HEIGHT as Integer, specifies a height of the desired ROI
-     * <p>
-     * AVKey.WIDTH as Integer, specifies a width of the desired ROI
-     * <p>
-     * AVKey.SECTOR as Sector, specifies an extent of the desired ROI
-     * <p>
-     * Optional parameters are:
-     * <p>
-     * AVKey.BAND_ORDER as array of integers, examples: for RGBA image: new int[] { 0, 1, 2, 3 }, or for ARGB image: new
-     * int[] { 3, 0, 1, 2 } , or if you want only RGB bands of the RGBA image: new int[] {0, 1, 2 }, or only Intensity
-     * (4th) band of the specific aerial image: new int[] { 3 }
+     *               <p> AVKey.HEIGHT as Integer, specifies a height of the desired ROI
+     *               <p> AVKey.WIDTH as Integer, specifies a width of the desired ROI
+     *               <p> AVKey.SECTOR as Sector, specifies an extent of the desired ROI
+     *               <p>
+     *               Optional parameters are:
+     *               <p> AVKey.BAND_ORDER as array of integers, examples: for RGBA image: new int[] { 0, 1, 2, 3 }, or
+     *               for  ARGB image: new int[] { 3, 0, 1, 2 } , or if you want only RGB bands of the RGBA image: new
+     *               int[] {0, 1, 2 }, or only Intensity (4th) band of the specific aerial image: new int[] { 3 }
      *
      * @return A writable data raster: BufferedImageRaster (if the source dataset is imagery) or ByteBufferRaster (if
-     * the source dataset is elevations)
+     *         the source dataset is elevations)
      */
     @Override
     public DataRaster getSubRaster(AVList params)

@@ -1,7 +1,29 @@
 /*
- * Copyright (C) 2013 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
+ * Copyright 2006-2009, 2017, 2020 United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ * 
+ * The NASA World Wind Java (WWJ) platform is licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ * 
+ * NASA World Wind Java (WWJ) also contains the following 3rd party Open Source
+ * software:
+ * 
+ *     Jackson Parser – Licensed under Apache 2.0
+ *     GDAL – Licensed under MIT
+ *     JOGL – Licensed under  Berkeley Software Distribution (BSD)
+ *     Gluegen – Licensed under Berkeley Software Distribution (BSD)
+ * 
+ * A complete listing of 3rd Party software notices and licenses included in
+ * NASA World Wind Java (WWJ)  can be found in the WorldWindJava-v2.2 3rd-party
+ * notices and licenses PDF found in code directory.
  */
 
 package gov.nasa.worldwindx.examples.layermanager;
@@ -55,7 +77,9 @@ public class ElevationModelManagerPanel extends JPanel
             public void propertyChange(PropertyChangeEvent propertyChangeEvent)
             {
                 if (propertyChangeEvent.getPropertyName().equals(AVKey.ELEVATION_MODEL))
+                {
                     if (!SwingUtilities.isEventDispatchThread())
+                    {
                         SwingUtilities.invokeLater(new Runnable()
                         {
                             public void run()
@@ -69,8 +93,12 @@ public class ElevationModelManagerPanel extends JPanel
                                 });
                             }
                         });
+                    }
                     else
+                    {
                         update(wwd);
+                    }
+                }
             }
         });
     }
@@ -89,7 +117,9 @@ public class ElevationModelManagerPanel extends JPanel
         // Populate this manager with an entry for each elevation model in the WorldWindow.
 
         if (this.isUpToDate(wwd))
+        {
             return;
+        }
 
         // First remove all the existing entries.
         this.modelPanels.clear();
@@ -111,7 +141,9 @@ public class ElevationModelManagerPanel extends JPanel
             for (ElevationModel elevationModel : cem.getElevationModels())
             {
                 if (elevationModel.getValue(AVKey.IGNORE) != null)
+                {
                     continue;
+                }
 
                 ElevationModelPanel elevationModelPanel = new ElevationModelPanel(wwd, this, elevationModel);
                 this.modelPanels.add(elevationModelPanel);
@@ -127,18 +159,26 @@ public class ElevationModelManagerPanel extends JPanel
 
         if (!(wwd.getModel().getGlobe().getElevationModel() instanceof CompoundElevationModel))
         {
-            return this.modelPanels.get(0).getElevationModel() == wwd.getModel().getGlobe().getElevationModel();
+           if (this.modelPanels.size() == 0)
+           {
+               return false;
+           }
+           return this.modelPanels.get(0).getElevationModel() == wwd.getModel().getGlobe().getElevationModel();
         }
 
         CompoundElevationModel cem = (CompoundElevationModel) wwd.getModel().getGlobe().getElevationModel();
 
         if (this.modelPanels.size() != cem.getElevationModels().size())
+        {
             return false;
+        }
 
         for (int i = 0; i < cem.getElevationModels().size(); i++)
         {
             if (cem.getElevationModels().get(i) != this.modelPanels.get(i).getElevationModel())
+            {
                 return false;
+            }
         }
 
         return true;

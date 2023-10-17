@@ -1,7 +1,29 @@
 /*
- * Copyright (C) 2012 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
+ * Copyright 2006-2009, 2017, 2020 United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ * 
+ * The NASA World Wind Java (WWJ) platform is licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ * 
+ * NASA World Wind Java (WWJ) also contains the following 3rd party Open Source
+ * software:
+ * 
+ *     Jackson Parser – Licensed under Apache 2.0
+ *     GDAL – Licensed under MIT
+ *     JOGL – Licensed under  Berkeley Software Distribution (BSD)
+ *     Gluegen – Licensed under Berkeley Software Distribution (BSD)
+ * 
+ * A complete listing of 3rd Party software notices and licenses included in
+ * NASA World Wind Java (WWJ)  can be found in the WorldWindJava-v2.2 3rd-party
+ * notices and licenses PDF found in code directory.
  */
 package gov.nasa.worldwind.layers.mercator;
 
@@ -97,15 +119,7 @@ public class BasicMercatorTiledImageLayer extends BasicTiledImageLayer
         MercatorTileUrlBuilder urlBuilder = (MercatorTileUrlBuilder)value;
         return urlBuilder;
     }
-
-    @Override
-    protected boolean needToSplit(DrawContext dc, Sector sector, Level level)
-    {
-        double texelSize = level.getTexelSize() * dc.getGlobe().getRadius();
-        double pixelSize = dc.getView().computePixelSizeAtDistance(sector.distanceTo(dc, dc.getView().getEyePoint()));
-        return texelSize > pixelSize * this.getDetailFactor();
-    }
-
+    
     @Override
     protected DownloadPostProcessor createDownloadPostProcessor(TextureTile tile)
     {
@@ -143,15 +157,11 @@ public class BasicMercatorTiledImageLayer extends BasicTiledImageLayer
             if (image != null)
             {
                 int type = image.getType();
-                if (type == BufferedImage.TYPE_CUSTOM)
-                {
-                    type = BufferedImage.TYPE_INT_RGB;
-                }
-                else if (type == BufferedImage.TYPE_BYTE_INDEXED)
+                if (type != BufferedImage.TYPE_INT_RGB)
                 {
                     type = BufferedImage.TYPE_INT_ARGB;
                 }
-
+                
                 BufferedImage trans = new BufferedImage(image.getWidth(), image.getHeight(), type);
                 double miny = ((MercatorSector) tile.getSector()).getMinLatPercent();
                 double maxy = ((MercatorSector) tile.getSector()).getMaxLatPercent();

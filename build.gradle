@@ -1,33 +1,179 @@
-apply plugin: 'java'
+buildscript {
+    dependencies {
+        classpath 'org.jfrog.buildinfo:build-info-extractor-gradle:latest.release'
+    }
+}
+
+plugins {
+    id 'com.jfrog.bintray' version '1.8.1'
+}
+
+apply plugin: 'java-library'
+apply plugin: 'maven-publish'
+apply plugin: 'com.jfrog.artifactory'
 
 group = 'earth.worldwind'
-version = '2.2.0'
+version = '2.3.0' + (project.hasProperty('snapshot') ? '-SNAPSHOT' : '')
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
+ant {
+    property(file: 'release-build.properties')
+    property(file: "gdal.${org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'win' : 'unix'}.properties")
+}
 
 ext {
-    joglVersion = '2.3.2'
-    gdalVersion = '2.4.0'
+    joglVersion = '2.4.0-rc-20200202'
+    gdalVersion = '3.5.0'
     jacksonVersion = '1.9.13'
     junitVersion = '4.5'
+    //systemGDAL = true
 }
 
 repositories {
     mavenLocal()
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
-    implementation "org.jogamp.jogl:jogl-all-main:${project.joglVersion}"
-    implementation "org.jogamp.gluegen:gluegen-rt-main:${project.joglVersion}"
+	implementation group: 'com.metsci.ext.org.jogamp.jogl', name: 'jogl-all-main', version:"$project.joglVersion"
+    implementation group: 'com.metsci.ext.org.jogamp.gluegen', name: 'gluegen-rt-main', version:"$project.joglVersion"
+    
+    if (project.hasProperty('systemGDAL')) {
+        implementation files("C:\\Program Files\\GDAL\\java\\gdal.jar")
+    } else {
+        implementation "org.gdal:gdal:$project.gdalVersion"
+    }
 
-    compile "org.gdal:gdal:${project.gdalVersion}"
+    implementation "org.codehaus.jackson:jackson-core-asl:$project.jacksonVersion"
 
-    implementation "org.codehaus.jackson:jackson-core-asl:${project.jacksonVersion}"
+    testImplementation "junit:junit:$project.junitVersion"
+}
 
-    testImplementation "junit:junit:${project.junitVersion}"
+task sourcesJar(type: Jar, dependsOn: classes) {
+    group = 'build'
+    description = 'Assembles a jar archive containing the sources.'
+    classifier = 'sources'
+    from (sourceSets.main.allSource) {
+        include '**/*.java'
+        exclude 'config/**'
+        exclude 'images/**'
+        exclude 'gov/nasa/worldwindx/**'
+    }
+}
+
+task worldwindJar(type: Jar) {
+    group = 'build'
+    description = 'Assembles a jar archive containing the WorldWind classes.'
+    archivesBaseName = 'worldwind'
+    from (sourceSets.main.output) {
+        exclude 'com/**'
+        exclude 'config/**'
+        exclude 'images/**'
+        exclude 'gov/nasa/worldwind/**'
+    }
+    doLast {
+        copy {
+            from "$buildDir/libs/$worldwindJar.archiveFileName"
+            into project.projectDir
+            rename "$worldwindJar.archiveFileName", "$worldwindJar.baseName.$worldwindJar.extension"
+        }
+    }
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    group = 'build'
+    description = 'Assembles a jar archive containing the javadocs.'
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+def pomConfig = {
+    licenses {
+        license {
+            name 'NASA Open Source Agreement v1.3'
+            url 'https://ti.arc.nasa.gov/opensource/nosa/'
+            distribution 'repo'
+        }
+    }
+    developers {
+        developer {
+            id 'emxsys'
+            name 'Bruce Schubert'
+            email 'bruce@emxsys.com'
+        }
+    }
+    scm {
+       url 'https://github.com/WorldWindEarth/WorldWindJava'
+    }
+}
+
+publishing {
+    publications {
+        bintray(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+            groupId project.group
+            artifactId project.name
+            version project.version
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description',
+                    'A community supported fork of the NASA WorldWind Java SDK (WWJ)' +
+                    'is for building cross-platform 3D geospatial desktop applications in Java.'
+                )
+                root.appendNode('name', project.name)
+                root.appendNode('url', 'https://github.com/WorldWindEarth/WorldWindJava')
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_API_KEY')
+    publications = ['bintray']
+    pkg {
+        repo = System.getenv('BINTRAY_REPOSITORY')
+        name = System.getenv('BINTRAY_PACKAGE')
+        userOrg = System.getenv('BINTRAY_ORGANIZATION')
+        desc = 'A community supported fork of the NASA WorldWind Java SDK (WWJ) ' +
+            'is for building cross-platform 3D geospatial desktop applications in Java.'
+        websiteUrl = 'https://worldwind.earth'
+        issueTrackerUrl = 'https://github.com/WorldWindEarth/WorldWindJava/issues'
+        vcsUrl = 'https://github.com/WorldWindEarth/WorldWindJava'
+        licenses = ['NASA-1.3']
+        labels = ['nasa', 'worldwind', 'worldwindjava', 'gis', 'geospatial',
+            'globe', '3d', 'jogl', 'maps', 'imagery', 'terrain',
+            'visualization', 'wms', 'wmts', 'shapes', 'shapefile', 'kml',
+            'opengl', 'sdk-java', 'community-edition'
+        ]
+        githubRepo = 'WorldWindEarth/WorldWindJava'
+        version {
+            name = project.version
+            desc = "WorldWind v$project.version"
+            vcsTag = System.getenv('TRAVIS_TAG')
+            released = new Date()
+        }
+    }
+}
+
+artifactory {
+    contextUrl = 'https://oss.jfrog.org/artifactory'
+    publish {
+        repository {
+            repoKey = 'oss-snapshot-local'
+            username = System.getenv('BINTRAY_USER')
+            password = System.getenv('BINTRAY_API_KEY')
+        }
+        defaults {
+            publications('bintray')
+            publishArtifacts = true
+        }
+    }
+    if (project.hasProperty('build.number')) {
+        clientConfig.info.setBuildNumber(project.getProperty('build.number'))
+    }
 }
 
 sourceSets {
@@ -49,57 +195,30 @@ sourceSets {
 }
 
 compileJava {
-    options.debug = !project.hasProperty("releaseBuild")
-}
-
-// Compile worldwind jar.
-jar {
-    dependsOn classes
-    version = null
-    from sourceSets.main.output
-    exclude 'gov/nasa/worldwindx/**'
-}
-// Copy worldwind jar to project-directory.
-jar.doLast {
-    copy {
-        from "$buildDir/libs/${jar.archiveName}"
-        into "${project.projectDir}"
-    }
-}
-
-// Compile worldwindx jar.
-task extensionsJar(type: Jar) {
-    group = 'build'
-    description = 'Assembles a jar archive containing the extension classes.'
-    baseName = 'worldwindx'
-    version = null
-    from (sourceSets.main.output) {
-        exclude 'com/**'
-        exclude 'config/**'
-        exclude 'images/**'
-        exclude 'gov/nasa/worldwind/**'
-    }
-}
-// Copy worldwindx jar to project-directory.
-extensionsJar.doLast {
-    copy {
-        from "$buildDir/libs/${extensionsJar.archiveName}"
-        into "${project.projectDir}"
-    }
-}
-
-artifacts {
-    archives extensionsJar
+    options.debug = !project.hasProperty('release')
 }
 
 test {
     dependsOn jar
-    classpath += project.files("$buildDir/libs/${jar.archiveName}", configurations.runtime)
+    classpath += project.files("$buildDir/libs/$jar.archiveFileName")
+}
+
+jar {
+    dependsOn classes
+    from sourceSets.main.output
+    exclude 'gov/nasa/worldwindx/**'
+    doLast {
+        copy {
+            from "$buildDir/libs/$jar.archiveFileName"
+            into project.projectDir
+            rename "$jar.archiveFileName", "$jar.baseName.$jar.extension"
+        }
+    }
 }
 
 javadoc {
     options {
-        overview = "${project.projectDir}/src/overview.html"
+        overview = "$project.projectDir/src/overview.html"
         windowTitle = 'WorldWindJava API'
         title = 'NASA WorldWind Java-Community Edition'
         header = 'NASA WorldWind-CE'
@@ -111,4 +230,101 @@ javadoc {
     }
     exclude 'com/**'
     exclude 'gov/nasa/worldwind/formats/**'
+}
+
+artifacts {
+    archives sourcesJar
+    archives worldwindJar
+    archives javadocJar
+}
+
+task processMilStd2525SVGs(dependsOn: jar) {
+    group = 'build'
+    description = 'Processes the MIL-STD-2525 SVG source files.'
+    
+    // Set outputs of this task to be PNG directory.
+    def milStd2525PngDir = file(ant.properties['milstd2525.png.dir'])
+    outputs.dir(milStd2525PngDir)
+
+    doLast {
+        def milStd2525SrcDir = file(ant.properties['milstd2525.src.dir'])
+        
+        // If PNG directory doesn't exist, create it.
+        if (!milStd2525PngDir.exists()) {
+            milStd2525PngDir.mkdirs()
+        }
+        
+        def width = ant.properties['milstd2525.png.width']
+        def height = ant.properties['milstd2525.png.height']
+        
+        // Rasterize the MIL-STD-2525 SVG sources. Exclude empty directories in order
+        // to suppress erroneous error messages from the Apache Batik Rasterizer.
+        milStd2525SrcDir.traverse([type: groovy.io.FileType.DIRECTORIES, excludeNameFilter: ~/fills|frames|icons/]) { srcDir ->
+            def dstDir = milStd2525PngDir.path + (srcDir.path - milStd2525SrcDir.path)
+            exec {
+                commandLine 'java',\
+                    '-jar',\
+                    "$project.projectDir/lib-external/batik/batik-rasterizer.jar",\
+                    '-m',\
+                    'image/png',\
+                    '-maxw',\
+                    width,\
+                    '-h',\
+                    height,\
+                    '-d',\
+                    dstDir,\
+                    srcDir
+            }
+        }
+        
+        // The Forward Edge of Battle (FEBA, 2.X.2.4.2.1) image has a custom height of 16 pixels.
+        milStd2525SrcDir.traverse([type: groovy.io.FileType.FILES, nameFilter: ~/g-g.dlf--------\.svg/]) { srcFile ->
+            def dstFile = ((milStd2525PngDir.path + (srcFile.path - milStd2525SrcDir.path)) - '.svg') + '.png'
+            exec {
+                commandLine 'java',\
+                    '-jar',\
+                    "$project.projectDir/lib-external/batik/batik-rasterizer.jar",\
+                    '-m',\
+                    'image/png',\
+                    '-maxw',\
+                    width,\
+                    '-h',\
+                    '16',\
+                    '-d',\
+                    dstFile,\
+                    srcFile
+            }
+        }
+        
+        // Trim the MIL-STD-2525 modifier images to remove transparent borders.
+        def modifiersDir = file("$milStd2525PngDir.path/modifiers")
+        modifiersDir.traverse([type: groovy.io.FileType.FILES]) { srcFile ->
+            exec {
+                commandLine 'java',\
+                    '-cp',\
+                    "$buildDir/libs/$jar.archiveFileName",\
+                    'gov.nasa.worldwind.util.ImageTrimmer',\
+                    srcFile
+            }
+        }
+    }
+}
+
+task milStd2525Zip(type: Zip, dependsOn: processMilStd2525SVGs) {
+    group = 'build'
+    description = 'Assembles the MIL-STD-2525 symbology package.'
+    def milStd2525OutDir = file(ant.properties['milstd2525.out.dir'])
+    def milStd2525PngDir = file(ant.properties['milstd2525.png.dir'])
+    from milStd2525PngDir
+    include '**/*'
+    archiveName 'milstd2525-symbols.zip'
+    destinationDir milStd2525OutDir
+}
+
+task runLayerManager(type: JavaExec, dependsOn: classes) {
+    group = 'run'
+    description = 'Runs the LayerManager example app.'
+    classpath sourceSets.main.runtimeClasspath
+    main = 'gov.nasa.worldwindx.examples.layermanager.LayerManagerApp'
+    systemProperty 'java.util.logging.config.file', "$project.projectDir/logging.properties"
 }

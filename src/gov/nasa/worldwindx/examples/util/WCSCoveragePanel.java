@@ -1,7 +1,29 @@
 /*
- * Copyright (C) 2014 United States Government as represented by the Administrator of the
- * National Aeronautics and Space Administration.
- * All Rights Reserved.
+ * Copyright 2006-2009, 2017, 2020 United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ * 
+ * The NASA World Wind Java (WWJ) platform is licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed
+ * under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ * CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ * 
+ * NASA World Wind Java (WWJ) also contains the following 3rd party Open Source
+ * software:
+ * 
+ *     Jackson Parser – Licensed under Apache 2.0
+ *     GDAL – Licensed under MIT
+ *     JOGL – Licensed under  Berkeley Software Distribution (BSD)
+ *     Gluegen – Licensed under Berkeley Software Distribution (BSD)
+ * 
+ * A complete listing of 3rd Party software notices and licenses included in
+ * NASA World Wind Java (WWJ)  can be found in the WorldWindJava-v2.2 3rd-party
+ * notices and licenses PDF found in code directory.
  */
 
 package gov.nasa.worldwindx.examples.util;
@@ -100,7 +122,11 @@ public class WCSCoveragePanel extends JPanel
         {
             e.printStackTrace();
             Container c = WCSCoveragePanel.this.getParent();
-            c.remove(WCSCoveragePanel.this);
+            if (c != null)
+            {
+                c.remove(WCSCoveragePanel.this);
+            }
+            
             JOptionPane.showMessageDialog((Component) wwd, "Unable to connect to server " + serverURI.toString(),
                 "Server Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -108,7 +134,9 @@ public class WCSCoveragePanel extends JPanel
 
         final java.util.List<WCS100CoverageOfferingBrief> coverages = caps.getContentMetadata().getCoverageOfferings();
         if (coverages == null)
+        {
             return;
+        }
 
         try
         {
@@ -193,14 +221,22 @@ public class WCSCoveragePanel extends JPanel
             if (((JCheckBox) actionEvent.getSource()).isSelected())
             {
                 if (this.component == null)
+                {
                     this.component = createComponent(coverageInfo.caps, coverageInfo);
+                    if (this.component == null)
+                    {
+                        return;
+                    }
+                }
 
                 updateComponent(this.component, true);
             }
             else
             {
                 if (this.component != null)
+                {
                     updateComponent(this.component, false);
+                }
             }
 
             // Tell the WorldWindow to update.
@@ -224,13 +260,28 @@ public class WCSCoveragePanel extends JPanel
     protected void updateComponent(Object component, boolean enable)
     {
         ElevationModel model = (ElevationModel) component;
-        CompoundElevationModel compoundModel =
-            (CompoundElevationModel) this.wwd.getModel().getGlobe().getElevationModel();
+        CompoundElevationModel compoundModel;
+
+        // Guarantee that we have a compound elevation model, so additional elevation models can be added.
+        ElevationModel em = this.wwd.getModel().getGlobe().getElevationModel();
+
+        if (!(em instanceof CompoundElevationModel))
+        {
+            compoundModel = new CompoundElevationModel();
+            compoundModel.addElevationModel(em);
+            this.wwd.getModel().getGlobe().setElevationModel(compoundModel);
+        }
+        else
+        {
+            compoundModel = (CompoundElevationModel) em;
+        }
 
         if (enable)
         {
             if (!compoundModel.getElevationModels().contains(model))
+            {
                 compoundModel.addElevationModel(model);
+            }
         }
         else
         {

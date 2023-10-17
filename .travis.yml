@@ -7,12 +7,8 @@ language: java
 # Configure the build to using the minimum and the latest stable Oracle JDKs and Open JDKs
 # Consider adding openjdk-ea and/or oraclejdk-ea to test early access JDKs
 jdk:
-  - openjdk8
   - openjdk11
-  - openjdk12
-  - oraclejdk8
   - oraclejdk11
-  - openjdk-ea
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
@@ -38,12 +34,13 @@ before_install:
 install: 
   # Using clean as dummy target; could install dependencies here if needed.
   - ./gradlew clean
-  
-# Use xvfb to run tests that require a GUI and give it some time to start
+
+# Use xvfb to run tests that require a GUI.
+services:
+  - xvfb
+
 before_script:
   - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
-  - sleep 3
 
 # Build the project
 script:
@@ -51,6 +48,13 @@ script:
 
 # Deploy develop branch javadocs to gh_pages, and create and deploy CHANGELOG.md on tags
 deploy:
+  # Publish SNAPSHOT artifacts to oss.jfrog.org
+  - provider: script
+    script: ./gradlew artifactoryPublish -Psnapshot -Pbuild.number=$TRAVIS_BUILD_NUMBER --stacktrace
+    skip_cleanup: true
+    on:
+      branch: develop
+      jdk: oraclejdk8
   # Publish API documentation to GitHub Pages
   - provider: pages
     github_token: $GITHUB_API_KEY
@@ -58,6 +62,13 @@ deploy:
     skip_cleanup: true
     on:
       branch: develop
+      jdk: oraclejdk8
+  # Publish release artifacts to Bintray/JCenter
+  - provider: script
+    script: ./gradlew bintrayUpload -Prelease --stacktrace
+    skip_cleanup: true
+    on:
+      tags: true
       jdk: oraclejdk8
   # Create CHANGELOG.md in the current directory
   - provider: script
